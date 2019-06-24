@@ -6,20 +6,38 @@
 
 #include "rsdb/rsdb.h"
 #include "util.h"
+#include <fcntl.h>
+#include <sys/stat.h>
 
 struct rsdb::DB::DBImpl {
-    // Member Functions
+    // Member Functions For Callers
     DBImpl(std::string pathName, OpenOptions options);
 
     ~DBImpl();
 
-    int Put(const Slice &key, const Slice &data, WriteOptions options);
+    bool Put(const Slice &key, const Slice &data, WriteOptions options);
 
-    int Get(const Slice &key, const Slice *data);
+    bool Get(const Slice &key, Slice *data);
 
     int Delete(const Slice &key);
 
-    // Predefined Data
+    bool Valid() const;
+
+    // Member Functions for Self
+
+    bool DBAlloc(size_t sz);
+
+    void DBFree();
+
+    void DBRewind();
+
+    int DBFindAndLock(const Slice &key, bool writelock);
+
+    char *DBReadAt();
+
+    void OpenFiles(int flag, int mode, size_t namelen);
+
+    // Predefined Value
     static constexpr size_t IDXLEN_SZ = 4;
     static constexpr char SEP = ':';
     static constexpr char SPACE = ' ';
@@ -31,41 +49,50 @@ struct rsdb::DB::DBImpl {
     static constexpr size_t FREE_OFF = 0;
     static constexpr size_t HASH_OFF = PTR_SZ;
 
+    static constexpr size_t IDXLEN_MIN = 6;
+    static constexpr size_t IDXLEN_MAX = 4096;
+    static constexpr size_t DATLEN_MIN = 2;
+    static constexpr size_t DATLEN_MAX = 4096;
+
     // Predefined Type
     using DBHASH = size_t;
     using COUNT = size_t;
 
     // Data Members
-    int idxfd;  /* fd for index file */
-    int datfd;  /* fd for data file */
-    char *idxbuf; /* malloc'ed buffer for index record */
-    char *datbuf; /* malloc'ed buffer for data record*/
-    char *name;   /* name db was opened under */
-    off_t idxoff; /* offset in index file of index record */
+    int idxfd = -1;  /* fd for index file */
+    int datfd = -1;  /* fd for data file */
+    char *idxbuf = nullptr; /* malloc'ed buffer for index record */
+    char *datbuf = nullptr; /* malloc'ed buffer for data record*/
+    char *name = nullptr;   /* name db was opened under */
+    off_t idxoff = 0; /* offset in index file of index record */
     /* key is at (idxoff + PTR_SZ + IDXLEN_SZ) */
-    size_t idxlen; /* length of index record */
+    size_t idxlen = 0; /* length of index record */
     /* excludes IDXLEN_SZ bytes at front of record */
     /* includes newline at end of index record */
-    off_t datoff; /* offset in data file of data record */
-    size_t datlen; /* length of data record */
+    off_t datoff = 0; /* offset in data file of data record */
+    size_t datlen = 0; /* length of data record */
     /* includes newline at end */
-    off_t ptrval; /* contents of chain ptr in index record */
-    off_t ptroff; /* chain ptr offset pointing to this idx record */
-    off_t chainoff; /* offset of hash chain for this index record */
-    off_t hashoff;  /* offset in index file of hash table */
-    DBHASH nhash;    /* current hash table size */
-    COUNT cnt_delok;    /* delete OK */
-    COUNT cnt_delerr;   /* delete error */
-    COUNT cnt_fetchok;  /* fetch OK */
-    COUNT cnt_fetcherr; /* fetch error */
-    COUNT cnt_nextrec;  /* nextrec */
-    COUNT cnt_stor1;    /* store: DB_INSERT, no empty, appended */
-    COUNT cnt_stor2;    /* store: DB_INSERT, found empty, reused */
-    COUNT cnt_stor3;    /* store: DB_REPLACE, diff len, appended */
-    COUNT cnt_stor4;    /* store: DB_REPLACE, same len, overwrote */
-    COUNT cnt_storerr;  /* store error */
+    off_t ptrval = 0; /* contents of chain ptr in index record */
+    off_t ptroff = 0; /* chain ptr offset pointing to this idx record */
+    off_t chainoff = 0; /* offset of hash chain for this index record */
+    off_t hashoff = 0;  /* offset in index file of hash table */
+    DBHASH nhash = 0;    /* current hash table size */
+    COUNT cnt_delok = 0;    /* delete OK */
+    COUNT cnt_delerr = 0;   /* delete error */
+    COUNT cnt_fetchok = 0;  /* fetch OK */
+    COUNT cnt_fetcherr = 0; /* fetch error */
+    COUNT cnt_nextrec = 0;  /* nextrec */
+    COUNT cnt_stor1 = 0;    /* store: DB_INSERT, no empty, appended */
+    COUNT cnt_stor2 = 0;    /* store: DB_INSERT, found empty, reused */
+    COUNT cnt_stor3 = 0;    /* store: DB_REPLACE, diff len, appended */
+    COUNT cnt_stor4 = 0;    /* store: DB_REPLACE, same len, overwrote */
+    COUNT cnt_storerr = 0;  /* store error */
+
+    std::string err_msg;
 };
 
+static constexpr char idx_extension[] = ".idx";
+static constexpr char dat_extension[] = ".dat";
 
 
 

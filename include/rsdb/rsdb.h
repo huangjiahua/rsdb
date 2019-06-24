@@ -17,6 +17,7 @@ struct OpenOptions {
     static constexpr int OPEN_OR_CREATE = 3;
 
     int type = OPEN_OR_CREATE;
+    int mode = 0600;
 };
 
 struct WriteOptions {
@@ -31,7 +32,7 @@ class DB {
 public:
     DB(const std::string &pathName, OpenOptions options);
 
-    ~DB() = default;
+    ~DB();
 
     DB(const DB &rhs) = delete;
 
@@ -41,11 +42,13 @@ public:
 
     DB &operator=(DB &&rhs) noexcept;
 
-    int Put(const std::string &key, const std::string &data, WriteOptions options);
+    bool Put(const std::string &key, const std::string &data, WriteOptions options);
 
-    int Get(const std::string &key, const std::string *data);
+    bool Get(const std::string &key, std::string *data);
 
     int Delete(const std::string &key);
+
+    bool Valid() const;
 
 private:
     struct DBImpl;
