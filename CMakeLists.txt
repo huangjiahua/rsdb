@@ -5,8 +5,8 @@ set(CMAKE_CXX_STANDARD 14)
 
 include_directories(./include)
 
-set(LIB_NAME librsdb)
-set(STATIC_LIB_NAME librsdb_static)
+set(LIB_NAME rsdb)
+set(STATIC_LIB_NAME rsdb_static)
 
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(DB_SRC ${SRC_DIR}/src/db.cpp ${SRC_DIR}/src/db_impl.cpp ${SRC_DIR}/src/hash.cpp ${SRC_DIR}/src/util.cpp)
