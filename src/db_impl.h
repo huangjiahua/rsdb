@@ -6,10 +6,15 @@
 
 #include "rsdb/rsdb.h"
 #include "util.h"
+#include "hash.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 
 struct rsdb::DB::DBImpl {
+    // Predefined Type
+    using DBHASH = size_t;
+    using COUNT = size_t;
+
     // Member Functions For Callers
     DBImpl(std::string pathName, OpenOptions options);
 
@@ -33,9 +38,26 @@ struct rsdb::DB::DBImpl {
 
     int DBFindAndLock(const Slice &key, bool writelock);
 
-    char *DBReadAt();
+    char *DBReadDat();
+
+    off_t DBReadPtr(off_t offset);
+
+    off_t DBReadIdx(off_t offset);
+
+    DBHASH DBHash(const Slice &s);
+
+    void DBDoDelete();
+
+    void DBWriteDat(const char *buf, off_t offset, int whence);
+
+    void DBWriteIdx(const char *buf, off_t offset, int whence, off_t freeptr);
+
+    void DBWritePtr(off_t offset, off_t saveptr);
+
+    off_t DBFindFree(size_t keylen, size_t datlen);
 
     void OpenFiles(int flag, int mode, size_t namelen);
+
 
     // Predefined Value
     static constexpr size_t IDXLEN_SZ = 4;
@@ -54,9 +76,6 @@ struct rsdb::DB::DBImpl {
     static constexpr size_t DATLEN_MIN = 2;
     static constexpr size_t DATLEN_MAX = 4096;
 
-    // Predefined Type
-    using DBHASH = size_t;
-    using COUNT = size_t;
 
     // Data Members
     int idxfd = -1;  /* fd for index file */

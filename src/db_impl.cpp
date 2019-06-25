@@ -6,6 +6,7 @@
 #include "util.h"
 #include <cstdlib>
 #include <cassert>
+#include <sys/uio.h>
 
 
 rsdb::DB::DBImpl::DBImpl(std::string pathName, rsdb::OpenOptions options) {
@@ -53,7 +54,7 @@ rsdb::DB::DBImpl::DBImpl(std::string pathName, rsdb::OpenOptions options) {
             err_sys("DBImpl(): fstat error");
 
         if (statbuf.st_size == 0) {
-            sprintf(asciiptr, "%*d", (int)PTR_SZ, 0);
+            sprintf(asciiptr, "%*d", (int) PTR_SZ, 0);
             hash[0] = 0;
             for (i = 0; i < this->nhash + 1; i++)
                 strcat(hash, asciiptr);
@@ -122,13 +123,6 @@ void rsdb::DB::DBImpl::DBFree() {
     }
 }
 
-void rsdb::DB::DBImpl::DBRewind() {
-
-}
-
-bool rsdb::DB::DBImpl::Put(const rsdb::Slice &key, const rsdb::Slice &data, rsdb::WriteOptions options) {
-    return false;
-}
 
 bool rsdb::DB::DBImpl::Get(const rsdb::Slice &key, rsdb::Slice *data) {
     char *ptr;
@@ -137,7 +131,7 @@ bool rsdb::DB::DBImpl::Get(const rsdb::Slice &key, rsdb::Slice *data) {
         ptr = nullptr;
         this->cnt_fetcherr++;
     } else {
-        ptr = DBReadAt();
+        ptr = DBReadDat();
         this->cnt_fetchok++;
     }
 
@@ -148,18 +142,324 @@ bool rsdb::DB::DBImpl::Get(const rsdb::Slice &key, rsdb::Slice *data) {
     return (ptr != nullptr);
 }
 
-int rsdb::DB::DBImpl::Delete(const rsdb::Slice &key) {
-    return 0;
-}
 
 int rsdb::DB::DBImpl::DBFindAndLock(const rsdb::Slice &key, bool writelock) {
-    return 0;
+    off_t offset, nextoffset;
+
+    this->chainoff = (DBHash(key) * PTR_SZ) + this->hashoff;
+    this->ptroff = this->chainoff;
+
+    if (writelock) {
+        if (writew_lock(this->idxfd, this->chainoff, SEEK_SET, 1) < 0)
+            err_dump("DBFindAndLock: writew_lock error");
+    } else {
+        if (readw_lock(this->idxfd, this->chainoff, SEEK_SET, 1) < 0)
+            err_dump("DBFindAndLock: readw_lock error");
+    }
+
+    offset = DBReadPtr(this->ptroff);
+
+    while (offset != 0) {
+        nextoffset = DBReadIdx(offset);
+        if (strcmp(this->idxbuf, key.data()) == 0)
+            break;
+        this->ptroff = offset;
+        offset = nextoffset;
+    }
+
+    return (offset == 0 ? -1 : 0);
 }
 
-char *rsdb::DB::DBImpl::DBReadAt() {
-    return nullptr;
+off_t rsdb::DB::DBImpl::DBReadPtr(off_t offset) {
+    char asciiptr[PTR_SZ + 1];
+
+    if (lseek(this->idxfd, offset, SEEK_SET) == -1)
+        err_dump("DBReadPtr: lseek error to ptr field");
+    if (read(this->idxfd, asciiptr, PTR_SZ) != PTR_SZ)
+        err_dump("DBReadPtr: read error of ptr field");
+    asciiptr[PTR_SZ] = '\0';
+    return (atol(asciiptr));
+}
+
+off_t rsdb::DB::DBImpl::DBReadIdx(off_t offset) {
+    ssize_t i;
+    char *ptr1, *ptr2;
+    char asciiptr[PTR_SZ + 1], asciilen[IDXLEN_SZ + 1];
+    struct iovec iov[2];
+
+    if ((this->idxoff = lseek(this->idxfd, offset,
+                              offset == 0 ? SEEK_CUR : SEEK_SET)) == -1)
+        err_dump("DBReadIdx: lseek error");
+
+    iov[0].iov_base = asciiptr;
+    iov[0].iov_len = PTR_SZ;
+    iov[1].iov_base = asciilen;
+    iov[1].iov_len = IDXLEN_SZ;
+
+    if ((i = readv(this->idxfd, &iov[0], 2)) != PTR_SZ + IDXLEN_SZ) {
+        if (i == 0 && offset == 0)
+            return (-1); // EOF for Iterator Next
+        err_dump("DBReadIdx: readv error of index record");
+    }
+
+    asciiptr[PTR_SZ] = '\0';
+    this->ptrval = atol(asciiptr);
+
+    asciilen[IDXLEN_SZ] = '\0';
+    if ((this->idxlen = atoi(asciilen)) < IDXLEN_MIN
+        || this->idxlen > IDXLEN_MAX)
+        err_dump("DBReadIdx: invalid length");
+
+    if ((i = read(this->idxfd, this->idxbuf, this->idxlen)) != this->idxlen)
+        err_dump("DBReadIdx: read error of index record");
+    if (this->idxbuf[this->idxlen - 1] != NEWLINE)
+        err_dump("DBReadIdx: missing newline");
+    this->idxbuf[this->idxlen - 1] = '\0';
+
+    if ((ptr1 = strchr(this->idxbuf, SEP)) == nullptr)
+        err_dump("DBReadIdx: missing first separator");
+    *ptr1++ = '\0';
+
+    if ((ptr2 = strchr(ptr1, SEP)) == nullptr)
+        err_dump("DBReadIdx: missing second separator");
+    *ptr2++ = '\0';
+
+    if (strchr(ptr2, SEP) != nullptr)
+        err_dump("DBReadIdx: too many separators");
+
+    if ((this->datoff = atol(ptr1)) < 0)
+        err_dump("DBReadIdx: starting offset < 0");
+    if ((this->datlen = atol(ptr2)) <= 0 || this->datlen > DATLEN_MAX)
+        err_dump("DBReadIdx: invalid length");
+    return (this->ptrval);
+}
+
+char *rsdb::DB::DBImpl::DBReadDat() {
+    if (lseek(this->datfd, this->datoff, SEEK_SET) == -1)
+        err_dump("DBReadDat: lseek error");
+    if (read(this->datfd, this->datbuf, this->datlen) != this->datlen)
+        err_dump("DBReadDat: read error");
+    if (this->datbuf[this->datlen - 1] != NEWLINE)
+        err_dump("DBReadAt: missing new line");
+    this->datbuf[this->datlen - 1] = '\0';
+    return (this->datbuf);
+}
+
+int rsdb::DB::DBImpl::Delete(const rsdb::Slice &key) {
+    int rc = 0;
+
+    if (DBFindAndLock(key, true) == 0) {
+        DBDoDelete();
+        this->cnt_delok++;
+    } else {
+        rc = -1;
+        this->cnt_delerr++;
+    }
+    if (un_lock(this->idxfd, this->chainoff, SEEK_SET, 1) < 0)
+        err_dump("DBImpl::Delete: un_lock error");
+    return (rc);
+}
+
+void rsdb::DB::DBImpl::DBDoDelete() {
+    int i;
+    char *ptr;
+    off_t freeptr, saveptr;
+
+    for (ptr = this->datbuf, i = 0; i < this->datlen - 1; i++)
+        *ptr++ = SPACE;
+    *ptr = '\0';
+    ptr = this->idxbuf;
+    assert(ptr[this->idxlen - 1] == '\0');
+    while (*ptr)
+        *ptr++ = SPACE;
+
+    if (writew_lock(this->idxfd, FREE_OFF, SEEK_SET, true) < 0)
+        err_dump("DBDoDelete: writew_lock error");
+
+    DBWriteDat(this->datbuf, this->datoff, SEEK_SET);
+
+    freeptr = DBReadPtr(FREE_OFF);
+
+    saveptr = this->ptrval;
+
+    DBWriteIdx(this->idxbuf, this->idxoff, SEEK_SET, freeptr);
+
+    DBWritePtr(FREE_OFF, this->idxoff);
+
+    DBWritePtr(this->ptroff, saveptr);
+    if (un_lock(this->idxfd, FREE_OFF, SEEK_SET, 1) < 0)
+        err_dump("DBDoDelete: un_lock error");
+}
+
+void rsdb::DB::DBImpl::DBWriteDat(const char *data, off_t offset, int whence) {
+    struct iovec iov[2];
+    static char newline = NEWLINE;
+
+    if (whence == SEEK_END)
+        if (writew_lock(this->datfd, 0, SEEK_SET, 0) < 0)
+            err_dump("DBWriteDat: writew_lock error");
+
+    if ((this->datoff = lseek(this->datfd, offset, whence)) == -1)
+        err_dump("DBWriteDat: lseek error");
+    this->datlen = strlen(data) + 1;
+
+    iov[0].iov_base = (char *) data;
+    iov[0].iov_len = this->datlen - 1;
+    iov[1].iov_base = &newline;
+    iov[1].iov_len = 1;
+
+    if (writev(this->datfd, &iov[0], 2) != this->datlen)
+        err_dump("DBWriteDat: writev error of data record");
+
+    if (whence == SEEK_END)
+        if (un_lock(this->datfd, 0, SEEK_SET, 0) < 0)
+            err_dump("DBWriteDat: un_lock error");
+}
+
+void rsdb::DB::DBImpl::DBWriteIdx(const char *key, off_t offset, int whence, off_t ptrval) {
+    struct iovec iov[2];
+    char asciiptrlen[PTR_SZ + IDXLEN_SZ + 1];
+    int len;
+
+    if ((this->ptrval = ptrval) < 0 || ptrval > PTR_MAX)
+        err_quit("DBWriteIdx: invalid ptr: %d", ptrval);
+    sprintf(this->idxbuf, "%s%c%lld%c%ld\n", key, SEP,
+            (long long) this->datoff, SEP, (long) this->datlen);
+    len = strlen(this->idxbuf);
+    if (len < IDXLEN_MIN || len > IDXLEN_MAX)
+        err_dump("DBWriteIdx: invalid length");
+    sprintf(asciiptrlen, "%*lld%*d", (int) PTR_SZ, (long long) ptrval,
+            (int) IDXLEN_SZ, len);
+
+    if (whence == SEEK_END)
+        if (writew_lock(this->idxfd, ((this->nhash + 1) * PTR_SZ) + 1,
+                        SEEK_SET, 0) < 0)
+            err_dump("DBWriteIdx: writew_lock error");
+
+    if ((this->idxoff = lseek(this->idxfd, offset, whence)) == -1)
+        err_dump("DBWriteIdx: lseek error");
+
+    iov[0].iov_base = asciiptrlen;
+    iov[0].iov_len = PTR_SZ + IDXLEN_SZ;
+    iov[1].iov_base = this->idxbuf;
+    iov[1].iov_len = len;
+    if (writev(this->idxfd, &iov[0], 2) != PTR_SZ + IDXLEN_SZ + len)
+        err_dump("DBWriteIdx: writev error of index record");
+
+    if (whence == SEEK_END)
+        if (un_lock(this->idxfd, ((this->nhash + 1) * PTR_SZ) + 1,
+                    SEEK_SET, 0) < 0)
+            err_dump("DBWriteIdx: un_lock error");
+}
+
+void rsdb::DB::DBImpl::DBWritePtr(off_t offset, off_t ptrval) {
+    char asciiptr[PTR_SZ + 1];
+
+    if (ptrval < 0 || ptrval > PTR_MAX)
+        err_quit("DBWritePtr: invalid ptr: %d", ptrval);
+    sprintf(asciiptr, "%*lld", (int) PTR_SZ, (long long) ptrval);
+
+    if (lseek(this->idxfd, offset, SEEK_SET) == -1)
+        err_dump("DBWritePtr: lseek error to ptr field");
+    if (write(this->idxfd, asciiptr, PTR_SZ) != PTR_SZ)
+        err_dump("DBWritePtr: write error of ptr field");
+}
+
+inline rsdb::DB::DBImpl::DBHASH rsdb::DB::DBImpl::DBHash(const rsdb::Slice &s) {
+    return Hash(s.data(), s.size()) % this->nhash;
+}
+
+bool rsdb::DB::DBImpl::Put(const rsdb::Slice &key, const rsdb::Slice &data, rsdb::WriteOptions options) {
+    int keylen, datlen;
+    bool rc = true;
+    off_t ptrval;
+
+    keylen = key.size();
+    datlen = data.size();
+    if (datlen < DATLEN_MIN || datlen > DATLEN_MAX)
+        err_dump("DBImpl::Put: invalid data length");
+
+    if (DBFindAndLock(key, true) < 0) {
+        if (options.type == WriteOptions::REPLACE) {
+            rc = false;
+            this->cnt_storerr++;
+            errno = ENOENT;
+            goto doreturn;
+        }
+        ptrval = DBReadPtr(this->chainoff);
+
+        if (DBFindFree(keylen, datlen) < 0) {
+            DBWriteDat(data.data(), 0, SEEK_END);
+            DBWriteIdx(key.data(), 0, SEEK_END, ptrval);
+            DBWritePtr(this->chainoff, this->idxoff);
+            this->cnt_stor1++;
+        } else {
+            DBWriteDat(data.data(), this->datoff, SEEK_SET);
+            DBWriteIdx(key.data(), this->idxoff, SEEK_SET, ptrval);
+            DBWritePtr(this->chainoff, this->chainoff);
+            this->cnt_stor2++;
+        }
+    } else {
+        if (options.type == WriteOptions::INSERT) {
+            rc = false;
+            this->cnt_storerr++;
+            goto doreturn;
+        }
+        if (datlen != this->datlen) {
+            DBDoDelete();
+            ptrval = DBReadPtr(this->chainoff);
+            DBWriteDat(data.data(), 0, SEEK_END);
+            DBWriteIdx(key.data(), 0, SEEK_END, ptrval);
+            DBWritePtr(this->chainoff, this->idxoff);
+            this->cnt_stor3++;
+        } else {
+            DBWriteDat(data.data(), this->datoff, SEEK_SET);
+            this->cnt_stor4++;
+        }
+    }
+    rc = true;
+    doreturn:
+    if (un_lock(this->idxfd, this->chainoff, SEEK_SET, 1) < 0)
+        err_dump("DBImpl::Put: unlock error");
+    return rc;
+}
+
+off_t rsdb::DB::DBImpl::DBFindFree(size_t keylen, size_t datlen) {
+    int rc;
+    off_t offset, nextoffset, saveoffset;
+
+    if (writew_lock(this->idxfd, FREE_OFF, SEEK_SET, 1) < 0)
+        err_dump("DBFindFree: writew_lock error");
+
+    saveoffset = FREE_OFF;
+    offset = DBReadPtr(saveoffset);
+
+    while (offset != 0) {
+        nextoffset = DBReadIdx(offset);
+        if (strlen(this->idxbuf) == keylen && this->datlen == datlen)
+            break;
+        saveoffset = offset;
+        offset = nextoffset;
+    }
+
+    if (offset == 0) {
+        rc = -1;
+    } else {
+        DBWritePtr(saveoffset, this->ptrval);
+        rc = 0;
+    }
+
+    if (un_lock(this->idxfd, FREE_OFF, SEEK_SET, 1) < 0)
+        err_dump("DBFindFree: un_lock error");
+    return (rc);
 }
 
 
+void rsdb::DB::DBImpl::DBRewind() {
+    off_t offset;
 
+    offset = (this->nhash + 1) * PTR_SZ;
 
+    if ((this->idxoff = lseek(this->idxfd, offset + 1, SEEK_SET)) == -1)
+        err_dump("DBRewind: lseek error");
+}
