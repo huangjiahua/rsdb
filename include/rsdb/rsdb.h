@@ -28,7 +28,11 @@ struct WriteOptions {
     int type = STORE;
 };
 
+class Iterator;
+
 class DB {
+    friend class Iterator;
+
 public:
     DB(const std::string &pathName, OpenOptions options);
 
@@ -50,6 +54,8 @@ public:
 
     bool Valid() const;
 
+    Iterator &&Iterator() const;
+
 private:
     struct DBImpl;
     std::unique_ptr<DBImpl> impl_;
@@ -68,6 +74,22 @@ public:
     Slice Key();
 
     Slice Value();
+
+    Iterator();
+
+    Iterator(const Iterator &) = delete;
+
+    Iterator &operator=(const Iterator &) = delete;
+
+    Iterator(Iterator &&) noexcept;
+
+    Iterator &operator=(Iterator &&) noexcept;
+
+    ~Iterator();
+
+private:
+    struct IteratorImpl;
+    std::unique_ptr<IteratorImpl> impl_;
 };
 
 

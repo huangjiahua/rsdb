@@ -4,6 +4,7 @@
 
 #include "rsdb/rsdb.h"
 #include "db_impl.h"
+#include "iterator_impl.h"
 
 
 rsdb::DB::DB(const std::string &pathName, rsdb::OpenOptions options) :
@@ -42,6 +43,12 @@ int rsdb::DB::Delete(const std::string &key) {
 
 bool rsdb::DB::Valid() const {
     return impl_ != nullptr && impl_->Valid();
+}
+
+rsdb::Iterator &&rsdb::DB::Iterator() const {
+    rsdb::Iterator iter;
+    iter.impl_->db = impl_.get();
+    return std::move(iter);
 }
 
 rsdb::DB::~DB() = default;
