@@ -7,6 +7,7 @@
 #include "rsdb/rsdb.h"
 #include "util.h"
 #include "hash.h"
+#include <cerrno>
 #include <fcntl.h>
 #include <sys/stat.h>
 
