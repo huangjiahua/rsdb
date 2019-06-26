@@ -45,9 +45,9 @@ bool rsdb::DB::Valid() const {
     return impl_ != nullptr && impl_->Valid();
 }
 
-rsdb::Iterator &&rsdb::DB::Iterator() const {
+rsdb::Iterator rsdb::DB::GetIterator() const {
     rsdb::Iterator iter;
-    iter.impl_->db = impl_.get();
+    iter.impl_->db = this->impl_.get();
     return std::move(iter);
 }
 

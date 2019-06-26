@@ -31,4 +31,30 @@ void rsdb::Iterator::IteratorImpl::Rewind() {
     this->nextoff = db->chainoff;
 }
 
+void rsdb::Iterator::IteratorImpl::SeekToFirst() {
+    Rewind();
+    int rc = db->DBNextTrec(this->idxbuf, this->datbuf, this->curroff, this->nextoff);
+    this->valid = (rc >= 0);
+}
+
+void rsdb::Iterator::IteratorImpl::Next() {
+    this->curroff = this->nextoff;
+    int rc = db->DBNextTrec(this->idxbuf, this->datbuf, this->curroff, this->nextoff);
+    this->valid = (rc >= 0);
+}
+
+rsdb::Slice rsdb::Iterator::IteratorImpl::Key() const {
+    return Slice(this->idxbuf);
+}
+
+rsdb::Slice rsdb::Iterator::IteratorImpl::Value() const {
+    return Slice(this->datbuf);
+}
+
+bool rsdb::Iterator::IteratorImpl::Valid() const {
+    return valid;
+}
+
+
+
 

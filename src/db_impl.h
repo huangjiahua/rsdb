@@ -37,6 +37,8 @@ struct rsdb::DB::DBImpl {
 
     void DBRewind();
 
+    int DBNextTrec(char *key, char *ptr, off_t &curroffset, off_t &nextoffset);
+
     int DBFindAndLock(const Slice &key, bool writelock);
 
     char *DBReadDat();

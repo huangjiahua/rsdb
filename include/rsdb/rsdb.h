@@ -54,7 +54,7 @@ public:
 
     bool Valid() const;
 
-    Iterator &&Iterator() const;
+    Iterator GetIterator() const;
 
 private:
     struct DBImpl;

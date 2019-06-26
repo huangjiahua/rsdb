@@ -1,6 +1,6 @@
 #include "iterator_impl.h"
 
-rsdb::Iterator::Iterator() : impl_(nullptr) {}
+rsdb::Iterator::Iterator() : impl_(new IteratorImpl()) {}
 
 rsdb::Iterator::~Iterator() {}
 
@@ -14,20 +14,22 @@ rsdb::Iterator &rsdb::Iterator::operator=(Iterator &&rhs) noexcept {
 }
 
 void rsdb::Iterator::SeekToFirst() {
+    impl_->SeekToFirst();
 }
 
 bool rsdb::Iterator::Valid() const {
-    return false;
+    return impl_->Valid();
 }
 
 void rsdb::Iterator::Next() {
+    impl_->Next();
 }
 
 rsdb::Slice rsdb::Iterator::Key() {
-    return Slice();
+    return impl_->Key();
 }
 
 rsdb::Slice rsdb::Iterator::Value() {
-    return Slice();
+    return impl_->Value();
 }
 

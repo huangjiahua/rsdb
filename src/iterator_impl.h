@@ -10,11 +10,23 @@ struct rsdb::Iterator::IteratorImpl {
     char *datbuf = nullptr;
     off_t curroff = 0;
     off_t nextoff = 0;
+    bool valid = false;
 
     IteratorImpl();
+
     ~IteratorImpl();
 
     void Rewind();
+
+    void SeekToFirst();
+
+    void Next();
+
+    Slice Key() const;
+
+    Slice Value() const;
+
+    bool Valid() const;
 
     void IteratorFree();
 };

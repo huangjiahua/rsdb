@@ -463,3 +463,35 @@ void rsdb::DB::DBImpl::DBRewind() {
     if ((this->idxoff = lseek(this->idxfd, offset + 1, SEEK_SET)) == -1)
         err_dump("DBRewind: lseek error");
 }
+
+int rsdb::DB::DBImpl::DBNextTrec(char *key, char *dat, off_t &curroffset, off_t &nextoffset) {
+    char c;
+    char *ptr;
+    int rc;
+
+    if (readw_lock(this->idxfd, FREE_OFF, SEEK_SET, 1) < 0)
+        err_dump("DBNextTrec: readw_lock error");
+
+    this->idxoff = curroffset;
+    do {
+        if (DBReadIdx(0) < 0) {
+            rc = -1;
+            goto doreturn;
+        }
+
+        ptr = this->idxbuf;
+        while ((c = *ptr++) != 0 && c == SPACE);
+    } while (c == 0);
+
+    nextoffset = curroffset + this->idxlen + PTR_SZ + IDXLEN_SZ;
+
+    if (key != nullptr)
+        strcpy(key, this->idxbuf);
+    ptr = DBReadDat();
+    strcpy(dat, ptr);
+    rc = 0;
+    doreturn:
+    if (un_lock(this->idxfd, FREE_OFF, SEEK_SET, 1) < 0)
+        err_dump("DBNextTrek: un_lock error");
+    return rc;
+}
