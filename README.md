@@ -9,14 +9,14 @@ Author: *huangjiahua*
 
 ## Version
 
-* V 0.1.0
+* V 0.2.0
+* New feature: iterator
 
 ## TODO
 
-1. Add iterator support.
-2. Refactor the codes to make them more "C++", because currently it use many codes directly from *[APUE](http://www.apuebook.com)* , which were written in C.
-3. Make it thread-safe.
-4. Implement a server using socket to provide service and provide client API.
+1. Refactor the codes to make them more "C++", because currently it use many codes directly from *[APUE](http://www.apuebook.com)* , which were written in C.
+2. Make it thread-safe.
+3. Implement a server using socket to provide service and provide client API.
 
 ## How to build?
 
@@ -37,3 +37,7 @@ make
 add_executable(my_binary ${MY_FILES})
 target_link_libraries(my_binary rsdb ${OTHER_LIBS})
 ```
+
+## Read More?
+
+* This project has a related [blog](http://jiahuah.com/database/rsdb-1-introduction/).
