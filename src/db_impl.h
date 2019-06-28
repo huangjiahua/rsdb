@@ -63,20 +63,31 @@ struct rsdb::DB::DBImpl {
 
 
     // Predefined Value
+    // the length of the "size of index"
     static constexpr size_t IDXLEN_SZ = 4;
+    // the separator that separates fields of indexes
     static constexpr char SEP = ':';
+    // empty space
     static constexpr char SPACE = ' ';
+    // new line mark
     static constexpr char NEWLINE = '\n';
-
+    // pointer length
     static constexpr size_t PTR_SZ = 7;
+    // the maximum value a pointer can points, not useful
     static constexpr size_t PTR_MAX = 9999999;
+    // default hash table size(how many buckets)
     static constexpr size_t NHASH_DEF = 137;
+    // the offset of free list
     static constexpr size_t FREE_OFF = 0;
+    // the offset of the first hash bucket
     static constexpr size_t HASH_OFF = PTR_SZ;
-
+    // the minimum index length
     static constexpr size_t IDXLEN_MIN = 6;
+    // the maximum index length, don't need to be this value
     static constexpr size_t IDXLEN_MAX = 4096;
+    // the minimum data length
     static constexpr size_t DATLEN_MIN = 2;
+    // the maximum data length, don't need to be this value
     static constexpr size_t DATLEN_MAX = 4096;
 
 
