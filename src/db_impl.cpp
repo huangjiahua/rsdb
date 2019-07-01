@@ -25,15 +25,19 @@ rsdb::DB::DBImpl::DBImpl(std::string pathName, rsdb::OpenOptions options) {
     strcpy(this->name, pathName.c_str());
     strcat(this->name, idx_extension);
 
-    if (options.type == OpenOptions::CREATE) {
-        OpenFiles(O_CREAT | O_EXCL | O_RDWR, options.mode, len);
-        this->err_msg = "DbImpl(): open O_CREAT error";
-    } else if (options.type == OpenOptions::OPEN_OR_CREATE) {
-        OpenFiles(O_CREAT | O_TRUNC | O_RDWR, options.mode, len);
-        this->err_msg = "DbImpl(): open O_TRUNC error";
-    } else {
-        OpenFiles(O_RDWR, options.mode, len);
-        this->err_msg = "DbImpl(): open O_RDWR error";
+    switch (options.type) {
+        case OpenOptions::CREATE:
+            OpenFiles(O_CREAT | O_EXCL | O_RDWR, options.mode, len);
+            break;
+        case OpenOptions::OPEN:
+            OpenFiles(O_RDWR, options.mode, len);
+            break;
+        case OpenOptions::OPEN_OR_CREATE:
+            OpenFiles(O_CREAT | O_RDWR, options.mode, len);
+            break;
+        case OpenOptions::TRUNC:
+            OpenFiles(O_TRUNC | O_CREAT | O_RDWR, options.mode, len);
+            break;
     }
 
     // check for open error
@@ -46,6 +50,7 @@ rsdb::DB::DBImpl::DBImpl(std::string pathName, rsdb::OpenOptions options) {
     // if the database is created
     // initialize the database files
     if (options.type == OpenOptions::CREATE
+        || options.type == OpenOptions::TRUNC
         || options.type == OpenOptions::OPEN_OR_CREATE) {
         if (writew_lock(this->idxfd, 0, SEEK_SET, 0) < 0)
             err_dump("DBImpl(): writew_lock error");
