@@ -25,12 +25,19 @@ rsdb::DB::DBImpl::DBImpl(std::string pathName, rsdb::OpenOptions options) {
     strcat(this->name, idx_extension);
     idx_muts = std::vector<std::mutex>(this->nhash + 2);
 
-    if (options.type == OpenOptions::CREATE) {
-        OpenFiles(O_CREAT | O_EXCL | O_RDWR, options.mode, len);
-    } else if (options.type == OpenOptions::OPEN_OR_CREATE) {
-        OpenFiles(O_CREAT | O_TRUNC | O_RDWR, options.mode, len);
-    } else {
-        OpenFiles(O_RDWR, options.mode, len);
+    switch (options.type) {
+        case OpenOptions::CREATE:
+            OpenFiles(O_CREAT | O_EXCL | O_RDWR, options.mode, len);
+            break;
+        case OpenOptions::OPEN:
+            OpenFiles(O_RDWR, options.mode, len);
+            break;
+        case OpenOptions::OPEN_OR_CREATE:
+            OpenFiles(O_CREAT | O_RDWR, options.mode, len);
+            break;
+        case OpenOptions::TRUNC:
+            OpenFiles(O_TRUNC | O_CREAT | O_RDWR, options.mode, len);
+            break;
     }
 
     // check for open error
@@ -42,6 +49,7 @@ rsdb::DB::DBImpl::DBImpl(std::string pathName, rsdb::OpenOptions options) {
     // if the database is created
     // initialize the database files
     if (options.type == OpenOptions::CREATE
+        || options.type == OpenOptions::TRUNC
         || options.type == OpenOptions::OPEN_OR_CREATE) {
         lock_guard lk(idx_file_mut);
         if (writew_lock(this->idxfd, 0, SEEK_SET, 0) < 0)

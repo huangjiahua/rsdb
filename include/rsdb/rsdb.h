@@ -12,11 +12,10 @@
 namespace rsdb {
 
 struct OpenOptions {
-    static constexpr int OPEN = 1;
-    static constexpr int CREATE = 2;
-    static constexpr int OPEN_OR_CREATE = 3;
-
-    int type = OPEN_OR_CREATE;
+    enum Type {
+        OPEN, CREATE, OPEN_OR_CREATE, TRUNC
+    };
+    Type type = TRUNC;
     int mode = 0600;
 };
 
