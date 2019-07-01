@@ -20,11 +20,10 @@ struct OpenOptions {
 };
 
 struct WriteOptions {
-    static constexpr int INSERT = 1;
-    static constexpr int REPLACE = 2;
-    static constexpr int STORE = 3;
-
-    int type = STORE;
+    enum Type {
+        INSERT, REPLACE, STORE
+    };
+    Type type = STORE;
 };
 
 class Iterator;
