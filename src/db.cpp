@@ -36,7 +36,7 @@ bool rsdb::DB::Get(const std::string &key, std::string *data) {
     return ret;
 }
 
-int rsdb::DB::Delete(const std::string &key) {
+bool rsdb::DB::Delete(const std::string &key) {
     Slice key_slice(key);
     return impl_->Delete(key_slice);
 }

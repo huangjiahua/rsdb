@@ -25,7 +25,7 @@ struct rsdb::DB::DBImpl {
 
     bool Get(const Slice &key, Slice *data);
 
-    int Delete(const Slice &key);
+    bool Delete(const Slice &key);
 
     bool Valid() const;
 

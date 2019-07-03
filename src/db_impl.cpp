@@ -250,19 +250,19 @@ char *rsdb::DB::DBImpl::DBReadDat() {
     return (this->datbuf);
 }
 
-int rsdb::DB::DBImpl::Delete(const rsdb::Slice &key) {
-    int rc = 0;
+bool rsdb::DB::DBImpl::Delete(const rsdb::Slice &key) {
+    bool ret = true;
 
     if (DBFindAndLock(key, true) == 0) {
         DBDoDelete();
         this->cnt_delok++;
     } else {
-        rc = -1;
+        ret = false;
         this->cnt_delerr++;
     }
     if (un_lock(this->idxfd, this->chainoff, SEEK_SET, 1) < 0)
         err_dump("DBImpl::Delete: un_lock error");
-    return (rc);
+    return ret;
 }
 
 void rsdb::DB::DBImpl::DBDoDelete() {
