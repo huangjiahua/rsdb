@@ -258,21 +258,20 @@ char *rsdb::DB::DBImpl::DBReadDat(DBContext *ct) {
     return (ct->datbuf);
 }
 
-int rsdb::DB::DBImpl::Delete(const rsdb::Slice &key) {
-    int rc = 0;
-    DBContext ct;
+bool rsdb::DB::DBImpl::Delete(const rsdb::Slice &key) {
+    bool ret = true;
 
     lock_guard lk(idx_muts[DBHash(key) + 1]);
     if (DBFindAndLock(&ct, key, true) == 0) {
         DBDoDelete(&ct);
         this->cnt_delok++;
     } else {
-        rc = -1;
+        ret = false;
         this->cnt_delerr++;
     }
     if (un_lock(this->idxfd, ct.chainoff, SEEK_SET, 1) < 0)
         err_dump("DBImpl::Delete: un_lock error");
-    return (rc);
+    return ret;
 }
 
 void rsdb::DB::DBImpl::DBDoDelete(DBContext *ct) {

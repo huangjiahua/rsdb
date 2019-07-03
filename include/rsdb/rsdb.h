@@ -48,7 +48,7 @@ public:
 
     bool Get(const std::string &key, std::string *data);
 
-    int Delete(const std::string &key);
+    bool Delete(const std::string &key);
 
     bool Valid() const;
 
