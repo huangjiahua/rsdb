@@ -40,4 +40,4 @@ target_link_libraries(my_binary rsdb ${OTHER_LIBS})
 
 ## Read More?
 
-* This project has a related [blog](http://jiahuah.com/database/rsdb-1-introduction/).
+* This project has a related [blog](https://jiahuah.com/content/fa85).
